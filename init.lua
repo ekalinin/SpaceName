@@ -2,7 +2,7 @@
 ---
 --- Shows current space id, adds ability to set a custom name for a screen.
 ---
---- Download: [https://github.com/ekalinin/SpaceName.spoon](https://github.com/ekalinin/SpaceName.spoon)
+--- Download: [https://github.com/ekalinin/SpaceName](https://github.com/ekalinin/SpaceName)
 
 local obj = {}
 obj.__index = obj
@@ -11,7 +11,7 @@ obj.__index = obj
 obj.name = "SpaceName"
 obj.version = "0.1"
 obj.author = "Eugene Kalinin <e.v.kalinin@gmail.com>"
-obj.homepage = "https://github.com/ekalinin/SpaceName.spoon"
+obj.homepage = "https://github.com/ekalinin/SpaceName"
 obj.license = "MIT - https://opensource.org/licenses/MIT"
 
 
