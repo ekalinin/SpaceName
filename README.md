@@ -5,6 +5,15 @@ Main features:
 - default name can be changed
 - switch to space by name or id from menu
 
+## Table of Contents
+
+  * [Installation](#installation)
+  * [Usage](#usage)
+    * [Current space id or name](#current-space-id-or-name)
+    * [Show all spaces](#show-all-spaces)
+    * [Set custom name](#set-custom-name)
+    * [Switch to space by id or name](#switch-to-space-by-id-or-name)
+
 ### Installation
 
 SpaceName is an extension for [Hammerspoon](http://hammerspoon.org/). Once Hammerspoon is installed, you can install the SpaceName Spoon:
