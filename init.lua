@@ -9,7 +9,7 @@ obj.__index = obj
 
 -- Metadata
 obj.name = "SpaceName"
-obj.version = "0.1"
+obj.version = "0.2"
 obj.author = "Eugene Kalinin <e.v.kalinin@gmail.com>"
 obj.homepage = "https://github.com/ekalinin/SpaceName"
 obj.license = "MIT - https://opensource.org/licenses/MIT"
@@ -17,7 +17,7 @@ obj.license = "MIT - https://opensource.org/licenses/MIT"
 
 -- Internals
 
-obj.log = hs.logger.new('SpaceName')
+obj.log = hs.logger.new('SpaceName', 'debug')
 obj.settingName = "spacenames.state."
 obj.menu = nil
 obj.watcher = nil
@@ -92,6 +92,10 @@ function obj:_getMenuItems()
                 disabled = id == spaceId
             })
         end
+
+        -- If there're two or more screens, we don't need to account them.
+        -- Show spaces from the first screen only.
+        break
     end
 
     table.insert(res, { title = "-" })
