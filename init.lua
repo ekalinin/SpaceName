@@ -60,10 +60,15 @@ end
 
 -- Show dialog to enter custom screen name (and save it in settings).
 function obj:_setSpaceName()
-    button, newName = hs.dialog.textPrompt("Screen name", "Please, eneter a readable name")
+    currentName = obj:_getSpaceIdOrNameForCurrentSpace()
+    button, newName = hs.dialog.textPrompt(
+        "Screen name", "Please, eneter a readable name",
+        currentName,
+        "Save", "Cancel"
+    )
     obj.log.df("setSpaceName: new space name=%s, button=%s", newName, button)
 
-    if newName ~= '' then
+    if button == "Save" and newName ~= '' then
         spaceId = obj:_getCurrentSpaceId()
         hs.settings.set(obj.settingName .. tostring(spaceId), newName)
         obj.log.df("setSpaceName: set space name=%s for space-id=%d", newName, spaceId)
