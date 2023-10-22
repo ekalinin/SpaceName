@@ -145,7 +145,13 @@ function obj:stop()
 end
 
 function obj:bindHotkeys(mapping)
-    return obj
+    local def = {
+        set = hs.fnutils.partial(self._setSpaceName, self),
+        -- show = hs.fnutils.partial(self._showMenu, self),
+     }
+
+     hs.spoons.bindHotkeysToSpec(def, mapping)
+     return self
 end
 
 return obj

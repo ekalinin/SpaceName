@@ -27,7 +27,12 @@ To initialize, add to `~/.hammerspoon/init.lua` (creating it if it does not exis
 ```lua
 spaceName = hs.loadSpoon("SpaceName")
 if spaceName then
-    spaceName:start()
+    spaceName
+        :start()
+        :bindHotkeys({
+            -- hot key to change current space's name
+            set={{"ctrl"}, "n"}
+        })
 end
 ```
 
