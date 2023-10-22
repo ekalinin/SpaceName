@@ -9,7 +9,7 @@ obj.__index = obj
 
 -- Metadata
 obj.name = "SpaceName"
-obj.version = "0.2"
+obj.version = "0.3"
 obj.author = "Eugene Kalinin <e.v.kalinin@gmail.com>"
 obj.homepage = "https://github.com/ekalinin/SpaceName"
 obj.license = "MIT - https://opensource.org/licenses/MIT"
