@@ -61,6 +61,9 @@ end
 -- Show dialog to enter custom screen name (and save it in settings).
 function obj:_setSpaceName()
     currentName = obj:_getSpaceIdOrNameForCurrentSpace()
+    if type(currentName) == "number" then
+        currentName = ""
+    end
     button, newName = hs.dialog.textPrompt(
         "Screen name", "Please, eneter a readable name",
         currentName,
