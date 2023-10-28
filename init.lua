@@ -86,11 +86,12 @@ function obj:_getMenuItems()
     res = {}
     spaceId = obj:_getCurrentSpaceId()
 
+    showID = 1
     for screenUuid, ids in pairs(hs.spaces.allSpaces()) do
         for i, id in ipairs(ids) do
             local spaceName = obj:_getSpaceIdOrNameBySpaceId(id)
             if id ~= spaceName then
-                spaceName = string.format("%d - %s", id, spaceName)
+                spaceName = string.format("%d - %s", showID, spaceName)
             end
 
             table.insert(res, {
@@ -99,6 +100,7 @@ function obj:_getMenuItems()
                 checked = id == spaceId,
                 disabled = id == spaceId
             })
+            showID = showID + 1
         end
 
         -- If there're two or more screens, we don't need to account them.
