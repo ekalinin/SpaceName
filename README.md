@@ -31,7 +31,9 @@ if spaceName then
         :start()
         :bindHotkeys({
             -- hot key to change current space's name
-            set={{"ctrl"}, "n"}
+            set={{"ctrl"}, "n"},
+            -- hot key to show menu with all spaces
+            show={{"ctrl}", "m"}
         })
 end
 ```
