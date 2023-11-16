@@ -65,7 +65,7 @@ function obj:_setSpaceName()
         currentName = ""
     end
     button, newName = hs.dialog.textPrompt(
-        "Screen name", "Please, eneter a readable name",
+        "Screen name", "Please, enter a readable name",
         currentName,
         "Save", "Cancel"
     )
