@@ -33,7 +33,7 @@ if spaceName then
             -- hotkey to change current space's name
             set={{"ctrl"}, "n"},
             -- hotkey to show menu with all spaces
-            show={{"ctrl}", "m"}
+            show={{"ctrl"}, "m"}
         })
 end
 ```

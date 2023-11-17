@@ -65,7 +65,7 @@ function obj:_setSpaceName()
         currentName = ""
     end
     button, newName = hs.dialog.textPrompt(
-        "Screen name", "Please, eneter a readable name",
+        "Screen name", "Please, enter a readable name",
         currentName,
         "Save", "Cancel"
     )
@@ -111,7 +111,7 @@ function obj:_getMenuItems()
     table.insert(res, { title = "-" })
     table.insert(res, { title = "Set name", fn = obj._setSpaceName })
     table.insert(res, { title = "-" })
-    table.insert(res, { title = "Verson: " .. obj.version})
+    table.insert(res, { title = "Version: " .. obj.version})
 
     obj.log.d("getMenuItems: done.")
     return res
