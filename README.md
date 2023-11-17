@@ -19,7 +19,7 @@ Main features:
 SpaceName is an extension for [Hammerspoon](http://hammerspoon.org/). Once Hammerspoon is installed, you can install the SpaceName Spoon:
 
 ```sh
-$ git clone https://github.com/ekalinin/SpaceName.git ~/.hammerspoon/Spoons/SpaceName.spoon
+git clone https://github.com/ekalinin/SpaceName.git ~/.hammerspoon/Spoons/SpaceName.spoon
 ```
 
 To initialize, add to `~/.hammerspoon/init.lua` (creating it if it does not exist):
