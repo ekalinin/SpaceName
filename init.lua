@@ -159,7 +159,7 @@ end
 function obj:bindHotkeys(mapping)
     local def = {
         set = hs.fnutils.partial(self._setSpaceName, self),
-        show = function() obj.menu:popupMenu(hs.mouse.getAbsolutePosition()) end,
+        show = function() obj.menu:popupMenu(hs.mouse.absolutePosition()) end,
      }
 
      hs.spoons.bindHotkeysToSpec(def, mapping)
