@@ -42,7 +42,7 @@ end
 function obj:_getSpaceIdOrNameBySpaceId(spaceId)
     obj.log.df("getSpaceIdOrNameById: got space-id=%s", spaceId)
     spaceName = hs.settings.get(obj.settingName .. tostring(spaceId))
-    obj.log.df("getSpaceIdOrNameById: find name in settgins=%s", spaceName)
+    obj.log.df("getSpaceIdOrNameById: find name in settings=%s", spaceName)
     if spaceName == nil then
         spaceName = spaceId
     end
