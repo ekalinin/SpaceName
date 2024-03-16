@@ -19,6 +19,7 @@ obj.license = "MIT - https://opensource.org/licenses/MIT"
 
 obj.log = hs.logger.new('SpaceName', 'debug')
 obj.settingName = "spacenames.state."
+obj.settingNameMonitorMode = obj.settingName .. "MonitorMode"
 obj.menu = nil
 obj.watcher = nil
 
@@ -80,18 +81,39 @@ function obj:_setSpaceName()
     end
 end
 
+function obj:_toogleMonitorMode()
+    mode = hs.settings.get(obj.settingNameMonitorMode)
+    if mode == nil or mode == "0" then
+        mode = "1"
+    else
+        mode = "0"
+    end
+    hs.settings.set(obj.settingNameMonitorMode, mode)
+end
+
+function obj:_isMultiMonitorMode()
+    mode = hs.settings.get(obj.settingNameMonitorMode)
+    return mode == "1"
+end
+
 -- Creates and return a table of screens for menu.
 function obj:_getMenuItems()
     obj.log.d("getMenuItems: starting ...")
     res = {}
     spaceId = obj:_getCurrentSpaceId()
 
+    screenID = 1
     showID = 1
     for screenUuid, ids in pairs(hs.spaces.allSpaces()) do
         for i, id in ipairs(ids) do
+            obj.log.d("getMenuItems: screen=" .. screenUuid .. ", id=" .. id)
             local spaceName = obj:_getSpaceIdOrNameBySpaceId(id)
             if id ~= spaceName then
-                spaceName = string.format("%d - %s", showID, spaceName)
+                if obj._isMultiMonitorMode() then
+                    spaceName = string.format("%d:%d - %s", screenID, showID, spaceName)
+                else
+                    spaceName = string.format("%d - %s", showID, spaceName)
+                end
             end
 
             table.insert(res, {
@@ -103,13 +125,20 @@ function obj:_getMenuItems()
             showID = showID + 1
         end
 
-        -- If there're two or more screens, we don't need to account them.
-        -- Show spaces from the first screen only.
-        break
+        if not obj._isMultiMonitorMode() then
+            break
+        end
+        screenID = screenID + 1
+        showID = 1
     end
 
     table.insert(res, { title = "-" })
     table.insert(res, { title = "Set name", fn = obj._setSpaceName })
+    table.insert(res, {
+        title = "Multi Monitor Mode",
+        fn = function() obj._toogleMonitorMode(); obj:_updateMenu() end,
+        checked = obj._isMultiMonitorMode()
+    })
     table.insert(res, { title = "-" })
     table.insert(res, { title = "Version: " .. obj.version})
 
