@@ -86,7 +86,7 @@ function obj:_setSpaceName()
     end
 end
 
-function obj:_toogleMonitorMode()
+function obj:_toggleMonitorMode()
     local mode = hs.settings.get(obj.settingNameMonitorMode)
     if mode == nil or mode == "0" then
         mode = "1"
@@ -141,7 +141,7 @@ function obj:_getMenuItems()
     table.insert(res, { title = "Set name", fn = obj._setSpaceName })
     table.insert(res, {
         title = "Multi Monitor Mode",
-        fn = function() obj:_toogleMonitorMode(); obj:_updateMenu() end,
+        fn = function() obj:_toggleMonitorMode(); obj:_updateMenu() end,
         checked = obj:_isMultiMonitorMode()
     })
     table.insert(res, { title = "-" })
