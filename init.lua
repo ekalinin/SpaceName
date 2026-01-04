@@ -29,14 +29,9 @@ obj.watcher = nil
 --
 
 function obj:_getCurrentSpaceId()
-    space = hs.spaces.activeSpaces()
-    spaceId = -1
-    for key, val in pairs(space) do
-        obj.log.df("_getCurrentSpaceId: got space key=%s, val=%d", key, val)
-        spaceId = val
-        break
-    end
-
+    local screen = hs.mouse.getCurrentScreen()
+    local spaceId = hs.spaces.activeSpaceOnScreen(screen)
+    obj.log.df("_getCurrentSpaceId: got spaceId=%s for screen=%s", spaceId, screen:name())
     return spaceId
 end
 
@@ -57,6 +52,16 @@ function obj:_getSpaceIdOrNameForCurrentSpace()
     spaceName = obj:_getSpaceIdOrNameBySpaceId(spaceId)
     obj.log.df("getSpaceIdOrNameCurrent: space-name=%s", spaceName)
     return spaceName
+end
+
+function obj:_getAllActiveSpaceNames()
+    local names = {}
+    for _, screen in ipairs(hs.screen.allScreens()) do
+        local spaceId = hs.spaces.activeSpaceOnScreen(screen)
+        local spaceName = obj:_getSpaceIdOrNameBySpaceId(spaceId)
+        table.insert(names, spaceName)
+    end
+    return table.concat(names, " | ")
 end
 
 -- Show dialog to enter custom screen name (and save it in settings).
@@ -149,7 +154,7 @@ end
 -- Updates main menu with actual spaces.
 function obj:_updateMenu()
     obj.log.d("updateMenu: starting ...")
-    menuText = obj:_getSpaceIdOrNameForCurrentSpace()
+    menuText = obj:_getAllActiveSpaceNames()
     obj.log.df("updateMenu: menu text (id or name)=%s", menuText)
     obj.menu:setTitle(menuText)
     obj.menu:setMenu(obj._getMenuItems())
