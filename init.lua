@@ -114,7 +114,7 @@ function obj:_getMenuItems()
             obj.log.d("getMenuItems: screen=" .. screenUuid .. ", id=" .. id)
             local spaceName = obj:_getSpaceIdOrNameBySpaceId(id)
             if id ~= spaceName then
-                if obj._isMultiMonitorMode() then
+                if obj:_isMultiMonitorMode() then
                     spaceName = string.format("%d:%d - %s", screenID, showID, spaceName)
                 else
                     spaceName = string.format("%d - %s", showID, spaceName)
@@ -130,7 +130,7 @@ function obj:_getMenuItems()
             showID = showID + 1
         end
 
-        if not obj._isMultiMonitorMode() then
+        if not obj:_isMultiMonitorMode() then
             break
         end
         screenID = screenID + 1
@@ -141,8 +141,8 @@ function obj:_getMenuItems()
     table.insert(res, { title = "Set name", fn = obj._setSpaceName })
     table.insert(res, {
         title = "Multi Monitor Mode",
-        fn = function() obj._toogleMonitorMode(); obj:_updateMenu() end,
-        checked = obj._isMultiMonitorMode()
+        fn = function() obj:_toogleMonitorMode(); obj:_updateMenu() end,
+        checked = obj:_isMultiMonitorMode()
     })
     table.insert(res, { title = "-" })
     table.insert(res, { title = "Version: " .. obj.version})
@@ -157,7 +157,7 @@ function obj:_updateMenu()
     local menuText = obj:_getAllActiveSpaceNames()
     obj.log.df("updateMenu: menu text (id or name)=%s", menuText)
     obj.menu:setTitle(menuText)
-    obj.menu:setMenu(obj._getMenuItems())
+    obj.menu:setMenu(obj:_getMenuItems())
     obj.log.d("updateMenu: done.")
 end
 
