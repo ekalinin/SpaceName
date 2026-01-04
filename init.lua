@@ -28,6 +28,8 @@ obj.watcher = nil
 -- Private functions
 --
 
+--- Get the ID of the current space for the screen under the mouse cursor.
+--- @return number spaceId The ID of the current space
 function obj:_getCurrentSpaceId()
     local screen = hs.mouse.getCurrentScreen()
     local spaceId = hs.spaces.activeSpaceOnScreen(screen)
@@ -35,6 +37,9 @@ function obj:_getCurrentSpaceId()
     return spaceId
 end
 
+--- Get the custom name for a space by its ID, or return the ID if no name is set.
+--- @param spaceId number The space ID to look up
+--- @return string|number The custom name if set, otherwise the space ID
 function obj:_getSpaceIdOrNameBySpaceId(spaceId)
     obj.log.df("getSpaceIdOrNameById: got space-id=%s", spaceId)
     local spaceName = hs.settings.get(obj.settingName .. tostring(spaceId))
@@ -46,6 +51,8 @@ function obj:_getSpaceIdOrNameBySpaceId(spaceId)
     return spaceName
 end
 
+--- Get the custom name or ID for the current space.
+--- @return string|number The custom name if set, otherwise the space ID
 function obj:_getSpaceIdOrNameForCurrentSpace()
     local spaceId = obj:_getCurrentSpaceId()
     obj.log.df("getSpaceIdOrNameCurrent: got space-id=%s", spaceId)
@@ -54,6 +61,8 @@ function obj:_getSpaceIdOrNameForCurrentSpace()
     return spaceName
 end
 
+--- Get all active space names/IDs across all screens, joined by " | ".
+--- @return string Concatenated space names separated by " | "
 function obj:_getAllActiveSpaceNames()
     local names = {}
     for _, screen in ipairs(hs.screen.allScreens()) do
@@ -64,7 +73,9 @@ function obj:_getAllActiveSpaceNames()
     return table.concat(names, " | ")
 end
 
--- Show dialog to enter custom screen name (and save it in settings).
+--- Show dialog to enter custom screen name and save it in settings.
+--- Displays a text prompt for the user to enter a readable name for the current space.
+--- If a name is already set, it will be shown as the default value.
 function obj:_setSpaceName()
     local currentName = obj:_getSpaceIdOrNameForCurrentSpace()
     if type(currentName) == "number" then
@@ -86,6 +97,9 @@ function obj:_setSpaceName()
     end
 end
 
+--- Toggle between single monitor and multi-monitor mode.
+--- In multi-monitor mode, all spaces across all screens are shown in the menu.
+--- In single monitor mode, only spaces from the first screen are shown.
 function obj:_toggleMonitorMode()
     local mode = hs.settings.get(obj.settingNameMonitorMode)
     if mode == nil or mode == "0" then
@@ -96,12 +110,16 @@ function obj:_toggleMonitorMode()
     hs.settings.set(obj.settingNameMonitorMode, mode)
 end
 
+--- Check if multi-monitor mode is enabled.
+--- @return boolean True if multi-monitor mode is enabled, false otherwise
 function obj:_isMultiMonitorMode()
     local mode = hs.settings.get(obj.settingNameMonitorMode)
     return mode == "1"
 end
 
--- Creates and return a table of screens for menu.
+--- Create and return a table of menu items for all spaces.
+--- Builds menu items for switching between spaces, setting names, toggling monitor mode, and version info.
+--- @return table Array of menu item tables with title, fn, checked, and disabled fields
 function obj:_getMenuItems()
     obj.log.d("getMenuItems: starting ...")
     local res = {}
@@ -151,7 +169,8 @@ function obj:_getMenuItems()
     return res
 end
 
--- Updates main menu with actual spaces.
+--- Update the menubar title and menu items with current space information.
+--- Refreshes the menubar display with the latest space names and menu structure.
 function obj:_updateMenu()
     obj.log.d("updateMenu: starting ...")
     local menuText = obj:_getAllActiveSpaceNames()
