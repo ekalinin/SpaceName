@@ -37,7 +37,7 @@ end
 
 function obj:_getSpaceIdOrNameBySpaceId(spaceId)
     obj.log.df("getSpaceIdOrNameById: got space-id=%s", spaceId)
-    spaceName = hs.settings.get(obj.settingName .. tostring(spaceId))
+    local spaceName = hs.settings.get(obj.settingName .. tostring(spaceId))
     obj.log.df("getSpaceIdOrNameById: find name in settings=%s", spaceName)
     if spaceName == nil then
         spaceName = spaceId
@@ -47,9 +47,9 @@ function obj:_getSpaceIdOrNameBySpaceId(spaceId)
 end
 
 function obj:_getSpaceIdOrNameForCurrentSpace()
-    spaceId = obj:_getCurrentSpaceId()
+    local spaceId = obj:_getCurrentSpaceId()
     obj.log.df("getSpaceIdOrNameCurrent: got space-id=%s", spaceId)
-    spaceName = obj:_getSpaceIdOrNameBySpaceId(spaceId)
+    local spaceName = obj:_getSpaceIdOrNameBySpaceId(spaceId)
     obj.log.df("getSpaceIdOrNameCurrent: space-name=%s", spaceName)
     return spaceName
 end
@@ -66,11 +66,11 @@ end
 
 -- Show dialog to enter custom screen name (and save it in settings).
 function obj:_setSpaceName()
-    currentName = obj:_getSpaceIdOrNameForCurrentSpace()
+    local currentName = obj:_getSpaceIdOrNameForCurrentSpace()
     if type(currentName) == "number" then
         currentName = ""
     end
-    button, newName = hs.dialog.textPrompt(
+    local button, newName = hs.dialog.textPrompt(
         "Screen name", "Please, enter a readable name",
         currentName,
         "Save", "Cancel"
@@ -78,7 +78,7 @@ function obj:_setSpaceName()
     obj.log.df("setSpaceName: new space name=%s, button=%s", newName, button)
 
     if button == "Save" and newName ~= '' then
-        spaceId = obj:_getCurrentSpaceId()
+        local spaceId = obj:_getCurrentSpaceId()
         hs.settings.set(obj.settingName .. tostring(spaceId), newName)
         obj.log.df("setSpaceName: set space name=%s for space-id=%d", newName, spaceId)
 
@@ -87,7 +87,7 @@ function obj:_setSpaceName()
 end
 
 function obj:_toogleMonitorMode()
-    mode = hs.settings.get(obj.settingNameMonitorMode)
+    local mode = hs.settings.get(obj.settingNameMonitorMode)
     if mode == nil or mode == "0" then
         mode = "1"
     else
@@ -97,18 +97,18 @@ function obj:_toogleMonitorMode()
 end
 
 function obj:_isMultiMonitorMode()
-    mode = hs.settings.get(obj.settingNameMonitorMode)
+    local mode = hs.settings.get(obj.settingNameMonitorMode)
     return mode == "1"
 end
 
 -- Creates and return a table of screens for menu.
 function obj:_getMenuItems()
     obj.log.d("getMenuItems: starting ...")
-    res = {}
-    spaceId = obj:_getCurrentSpaceId()
+    local res = {}
+    local spaceId = obj:_getCurrentSpaceId()
 
-    screenID = 1
-    showID = 1
+    local screenID = 1
+    local showID = 1
     for screenUuid, ids in pairs(hs.spaces.allSpaces()) do
         for i, id in ipairs(ids) do
             obj.log.d("getMenuItems: screen=" .. screenUuid .. ", id=" .. id)
@@ -154,7 +154,7 @@ end
 -- Updates main menu with actual spaces.
 function obj:_updateMenu()
     obj.log.d("updateMenu: starting ...")
-    menuText = obj:_getAllActiveSpaceNames()
+    local menuText = obj:_getAllActiveSpaceNames()
     obj.log.df("updateMenu: menu text (id or name)=%s", menuText)
     obj.menu:setTitle(menuText)
     obj.menu:setMenu(obj._getMenuItems())
