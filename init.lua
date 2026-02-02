@@ -173,7 +173,10 @@ end
 --- Refreshes the menubar display with the latest space names and menu structure.
 function obj:_updateMenu()
     obj.log.d("updateMenu: starting ...")
-    local menuText = obj:_getAllActiveSpaceNames()
+    local menuText = obj:_getSpaceIdOrNameForCurrentSpace()
+    if obj._isMultiMonitorMode() then
+        menuText = obj:_getAllActiveSpaceNames()
+    end;
     obj.log.df("updateMenu: menu text (id or name)=%s", menuText)
     obj.menu:setTitle(menuText)
     obj.menu:setMenu(obj:_getMenuItems())
