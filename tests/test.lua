@@ -10,6 +10,8 @@
 --   * names saved by older versions under the space ID are migrated
 --   * the primary space (empty uuid) can still be named
 --   * menu items follow hs.screen.allScreens() order, not pairs() order
+--   * window positions are saved relative to the screen and restored by
+--     window id, then by app and title, then by app only
 
 local spoonPath = arg[1] or "init.lua"
 
@@ -20,14 +22,36 @@ local displays = {}     -- hs.spaces.data_managedDisplaySpaces() result
 local screens = {}      -- hs.screen.allScreens() result (ordered)
 local mouseScreen = nil
 local dialogAnswer = { "Cancel", "" }
+local windows = {}      -- hs.window.allWindows() result
+local files = {}        -- hs.json.write() destination
+local lastAlert = nil
 
 local function noop() end
 
-local function newScreen(uuid, name)
+local function newScreen(uuid, name, fullFrame)
     return {
         getUUID = function() return uuid end,
         name = function() return name end,
+        fullFrame = function() return fullFrame end,
     }
+end
+
+local function newWindow(id, app, title, screen, frame, standard)
+    local win = {
+        id = function() return id end,
+        title = function() return title end,
+        isStandard = function() return standard ~= false end,
+        screen = function() return screen end,
+        frame = function() return frame end,
+        application = function()
+            return {
+                bundleID = function() return app end,
+                name = function() return app end,
+            }
+        end,
+    }
+    win.setFrame = function(_, newFrame) win.moved = newFrame end
+    return win
 end
 
 local function newLogger()
@@ -68,6 +92,7 @@ local function spacesForUuid(uuid)
 end
 
 hs = {
+    configdir = "/tmp/hammerspoon",
     logger = { new = newLogger },
     settings = {
         get = function(key) return settings[key] end,
@@ -100,6 +125,12 @@ hs = {
         },
     },
     screen = { allScreens = function() return screens end },
+    window = { allWindows = function() return windows end },
+    json = {
+        write = function(data, path) files[path] = data; return true end,
+        read = function(path) return files[path] end,
+    },
+    alert = { show = function(msg) lastAlert = msg end },
     mouse = {
         getCurrentScreen = function() return mouseScreen end,
         absolutePosition = function() return { x = 0, y = 0 } end,
@@ -246,6 +277,121 @@ check("T4c single monitor mode shows the first screen",
     items[1].title, "1 - One")
 check("T4d single monitor mode shows only the first screen",
     items[3].title, "-")
+
+-- Test 5: window positions are saved per screen and restored ---------------
+
+local function frame(x, y, w, h)
+    return { x = x, y = y, w = w, h = h }
+end
+
+local function menuTitles(menuItems)
+    local titles = {}
+    for _, item in ipairs(menuItems) do
+        titles[item.title] = true
+    end
+    return titles
+end
+
+-- external screen sits to the right of the main one and is shifted up
+local mainScreen = newScreen("MAIN-UUID", "Built-in", frame(0, 0, 1440, 900))
+local extScreen = newScreen("EXT-UUID", "External",
+    frame(1440, -540, 2560, 1440))
+screens = { mainScreen, extScreen }
+
+local term = newWindow(11, "com.iterm2", "zsh", extScreen,
+    frame(1540, -490, 800, 600))
+local notes = newWindow(12, "md.obsidian", "Notes", mainScreen,
+    frame(10, 20, 700, 500))
+local popup = newWindow(13, "com.iterm2", "", extScreen,
+    frame(0, 0, 100, 10), false)
+windows = { term, notes, popup }
+
+obj:_saveWindowPositions()
+local saved = files[obj.windowsFile]
+check("T5a save writes to obj.windowsFile",
+    obj.windowsFile, "/tmp/hammerspoon/SpaceName.windows.json")
+check("T5b non-standard windows are skipped", #saved, 2)
+check("T5c screen uuid is saved", saved[1].screen, "EXT-UUID")
+check("T5d frame is relative to the screen origin (x)",
+    saved[1].frame.x, 100)
+check("T5e frame is relative to the screen origin (y)",
+    saved[1].frame.y, 50)
+check("T5f app bundle id is saved", saved[1].app, "com.iterm2")
+check("T5g save shows a summary", lastAlert, "SpaceName: saved 2 windows")
+
+-- the external screen is reconnected at a different offset
+extScreen = newScreen("EXT-UUID", "External", frame(1440, 0, 2560, 1440))
+screens = { mainScreen, extScreen }
+term = newWindow(11, "com.iterm2", "zsh", mainScreen, frame(0, 0, 800, 600))
+windows = { term, notes }
+obj:_restoreWindowPositions()
+check("T5h window follows the screen (x)", term.moved.x, 1540)
+check("T5i window follows the screen (y)", term.moved.y, 50)
+check("T5j window size is restored", term.moved.w, 800)
+check("T5k restore shows a summary",
+    lastAlert, "SpaceName: restored 2 of 2 windows")
+
+-- "app restart": ids changed, title matches
+term = newWindow(99, "com.iterm2", "zsh", mainScreen, frame(0, 0, 10, 10))
+windows = { term }
+obj:_restoreWindowPositions()
+check("T5l window matched by app and title", term.moved.x, 1540)
+
+-- "reboot": ids and titles changed, only the app matches
+term = newWindow(98, "com.iterm2", "~ (bash)", mainScreen,
+    frame(0, 0, 10, 10))
+windows = { term }
+obj:_restoreWindowPositions()
+check("T5m window matched by app only", term.moved.x, 1540)
+
+-- same id but another app: the id is stale, fall back to app matching
+local swappedA = newWindow(12, "com.iterm2", "zsh", mainScreen,
+    frame(0, 0, 10, 10))
+local swappedB = newWindow(11, "md.obsidian", "Notes", mainScreen,
+    frame(0, 0, 10, 10))
+windows = { swappedA, swappedB }
+obj:_restoreWindowPositions()
+check("T5n stale id does not move a window of another app",
+    swappedA.moved.x, 1540)
+check("T5o stale id does not move a window of another app",
+    swappedB.moved.x, 10)
+
+-- id match wins over title match, even for a later entry
+local byIdA = newWindow(12, "com.iterm2", "Notes", mainScreen,
+    frame(0, 0, 10, 10))
+local byIdB = newWindow(11, "com.iterm2", "zsh", mainScreen,
+    frame(0, 0, 10, 10))
+windows = { byIdA, byIdB }
+files[obj.windowsFile] = {
+    { id = 11, app = "com.iterm2", title = "Notes", screen = "MAIN-UUID",
+      frame = frame(1, 1, 10, 10) },
+    { id = 12, app = "com.iterm2", title = "zsh", screen = "MAIN-UUID",
+      frame = frame(2, 2, 10, 10) },
+}
+obj:_restoreWindowPositions()
+check("T5p id match wins over title match (first entry)", byIdB.moved.x, 1)
+check("T5q id match wins over title match (second entry)", byIdA.moved.x, 2)
+
+-- saved screen is not connected: window stays where it is
+screens = { mainScreen }
+term = newWindow(11, "com.iterm2", "zsh", mainScreen, frame(0, 0, 10, 10))
+windows = { term }
+files[obj.windowsFile] = saved
+obj:_restoreWindowPositions()
+check("T5r window on a missing screen is skipped", term.moved, nil)
+check("T5s missing screen is reported",
+    lastAlert, "SpaceName: restored 0 of 2 windows")
+
+-- nothing saved yet
+files[obj.windowsFile] = nil
+obj:_restoreWindowPositions()
+check("T5t restore without a file is reported",
+    lastAlert, "SpaceName: no saved window positions")
+
+local titles = menuTitles(obj:_getMenuItems())
+check("T5u save menu item exists", titles["Save window positions"], true)
+check("T5v restore menu item exists",
+    titles["Restore window positions"], true)
 
 -- Summary -------------------------------------------------------------------
 
