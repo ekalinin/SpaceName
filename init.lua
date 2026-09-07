@@ -37,12 +37,54 @@ function obj:_getCurrentSpaceId()
     return spaceId
 end
 
+--- Get the settings key for storing the custom name of a space.
+--- macOS reassigns space IDs (for example after a reboot), so the key is
+--- based on the space uuid when it is available. The primary space has an
+--- empty uuid, so its ID is used instead.
+--- @param spaceId number The space ID to look up
+--- @return string The settings key for the space
+function obj:_getSettingKeyBySpaceId(spaceId)
+    local displays = hs.spaces.data_managedDisplaySpaces() or {}
+    for _, display in ipairs(displays) do
+        for _, space in ipairs(display.Spaces or {}) do
+            if space.ManagedSpaceID == spaceId
+                and space.uuid ~= nil and space.uuid ~= "" then
+                return obj.settingName .. space.uuid
+            end
+        end
+    end
+    return obj.settingName .. tostring(spaceId)
+end
+
+--- Move a name saved by older versions under the space ID to the uuid key.
+--- @param spaceId number The space ID the name was saved under
+--- @param key string The settings key to move the name to
+--- @return string|nil The migrated name, or nil if there was nothing to move
+function obj:_migrateLegacySpaceName(spaceId, key)
+    local legacyKey = obj.settingName .. tostring(spaceId)
+    if legacyKey == key then
+        return nil
+    end
+    local spaceName = hs.settings.get(legacyKey)
+    if spaceName == nil then
+        return nil
+    end
+    obj.log.df("migrateLegacySpaceName: %s -> %s", legacyKey, key)
+    hs.settings.set(key, spaceName)
+    hs.settings.clear(legacyKey)
+    return spaceName
+end
+
 --- Get the custom name for a space by its ID, or return the ID if no name is set.
 --- @param spaceId number The space ID to look up
 --- @return string|number The custom name if set, otherwise the space ID
 function obj:_getSpaceIdOrNameBySpaceId(spaceId)
     obj.log.df("getSpaceIdOrNameById: got space-id=%s", spaceId)
-    local spaceName = hs.settings.get(obj.settingName .. tostring(spaceId))
+    local key = obj:_getSettingKeyBySpaceId(spaceId)
+    local spaceName = hs.settings.get(key)
+    if spaceName == nil then
+        spaceName = obj:_migrateLegacySpaceName(spaceId, key)
+    end
     obj.log.df("getSpaceIdOrNameById: find name in settings=%s", spaceName)
     if spaceName == nil then
         spaceName = spaceId
@@ -90,7 +132,7 @@ function obj:_setSpaceName()
 
     if button == "Save" and newName ~= '' then
         local spaceId = obj:_getCurrentSpaceId()
-        hs.settings.set(obj.settingName .. tostring(spaceId), newName)
+        hs.settings.set(obj:_getSettingKeyBySpaceId(spaceId), newName)
         obj.log.df("setSpaceName: set space name=%s for space-id=%d", newName, spaceId)
 
         obj:_updateMenu()
@@ -127,7 +169,11 @@ function obj:_getMenuItems()
 
     local screenID = 1
     local showID = 1
-    for screenUuid, ids in pairs(hs.spaces.allSpaces()) do
+    -- hs.screen.allScreens() has a stable order, pairs() does not
+    local allSpaces = hs.spaces.allSpaces() or {}
+    for _, screen in ipairs(hs.screen.allScreens()) do
+        local screenUuid = screen:getUUID()
+        local ids = allSpaces[screenUuid] or {}
         for i, id in ipairs(ids) do
             obj.log.d("getMenuItems: screen=" .. screenUuid .. ", id=" .. id)
             local spaceName = obj:_getSpaceIdOrNameBySpaceId(id)
