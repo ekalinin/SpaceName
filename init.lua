@@ -169,7 +169,11 @@ function obj:_getMenuItems()
 
     local screenID = 1
     local showID = 1
-    for screenUuid, ids in pairs(hs.spaces.allSpaces()) do
+    -- hs.screen.allScreens() has a stable order, pairs() does not
+    local allSpaces = hs.spaces.allSpaces() or {}
+    for _, screen in ipairs(hs.screen.allScreens()) do
+        local screenUuid = screen:getUUID()
+        local ids = allSpaces[screenUuid] or {}
         for i, id in ipairs(ids) do
             obj.log.d("getMenuItems: screen=" .. screenUuid .. ", id=" .. id)
             local spaceName = obj:_getSpaceIdOrNameBySpaceId(id)
