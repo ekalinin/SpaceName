@@ -13,6 +13,7 @@ Main features:
     * [Show all spaces](#show-all-spaces)
     * [Set custom name](#set-custom-name)
     * [Switch to space by id or name](#switch-to-space-by-id-or-name)
+  * [Tests](#tests)
 
 ### Installation
 
@@ -78,3 +79,12 @@ Menu text will change:
 Click on the space id (or name) to show all available spaces and select one to switch:
 
 ![Switch to space](assets/04.switch.png)
+
+### Tests
+
+The test runs the spoon against a mocked `hs` API and needs
+[LuaJIT](https://luajit.org/):
+
+```sh
+make test
+```
