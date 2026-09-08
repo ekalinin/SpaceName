@@ -85,9 +85,15 @@ Click on the space id (or name) to show all available spaces and select one to s
 #### Save and restore window positions
 
 Choose "Save window positions" to write the position, size and screen of
-every window of every application on all screens to
+every window of every application on all screens and all spaces to
 `~/.hammerspoon/SpaceName.windows.json`. Choose "Restore window positions"
-to move the windows back.
+to move the windows back. Windows stay on the space they are on.
+
+macOS reports only the windows on the spaces shown right now, so both
+actions visit every space on every screen through Mission Control and then
+come back to the spaces that were active before. Spaces of full screen
+applications are skipped. This takes about a second per space, so do not
+use the mouse or keyboard until the summary alert appears.
 
 Positions are stored relative to the screen, so windows follow their
 screen even if the arrangement of displays changed. Windows whose screen
@@ -96,10 +102,12 @@ entry by application and window id, then by application and window title,
 then by application only, so restore also works after applications or the
 system were restarted.
 
-The file location can be changed after loading the spoon:
+The file location and the pause after each space switch (in seconds) can be
+changed after loading the spoon:
 
 ```lua
 spaceName.windowsFile = os.getenv("HOME") .. "/windows.json"
+spaceName.spaceSwitchDelay = 1.5
 ```
 
 ### Tests

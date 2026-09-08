@@ -21,8 +21,11 @@ obj.log = hs.logger.new('SpaceName', 'debug')
 obj.settingName = "spacenames.state."
 obj.settingNameMonitorMode = obj.settingName .. "MonitorMode"
 obj.windowsFile = hs.configdir .. "/SpaceName.windows.json"
+obj.spaceSwitchDelay = 1
 obj.menu = nil
 obj.watcher = nil
+obj.walking = false
+obj.walkTimer = nil
 
 
 --
@@ -175,7 +178,8 @@ end
 function obj:_getWindowEntry(win)
     local screen = win:screen()
     local app = win:application()
-    if not win:isStandard() or screen == nil or app == nil then
+    if not win:isStandard() or win:id() == nil
+        or screen == nil or app == nil then
         return nil
     end
     local frame = win:frame()
@@ -193,22 +197,92 @@ function obj:_getWindowEntry(win)
     }
 end
 
---- Save positions and screens of all open windows to obj.windowsFile.
-function obj:_saveWindowPositions()
-    local entries = {}
-    for _, win in ipairs(hs.window.allWindows()) do
-        local entry = obj:_getWindowEntry(win)
-        if entry ~= nil then
-            table.insert(entries, entry)
-        end
-    end
-    if not hs.json.write(entries, obj.windowsFile, true, true) then
-        obj.log.ef("saveWindowPositions: cannot write %s", obj.windowsFile)
-        hs.alert.show("SpaceName: cannot save window positions")
+--- Visit every user space on every screen. macOS only reports windows
+--- on the spaces shown right now, so `visit()` is called while each
+--- space is shown, and `done()` after the spaces that were active at
+--- the start are shown again. Switching takes time, so the walk is
+--- asynchronous and this function returns at once.
+--- @param visit function Called once per user space
+--- @param done function Called when the walk is over
+function obj:_walkSpaces(visit, done)
+    if obj.walking then
+        hs.alert.show("SpaceName: busy, try again later")
         return
     end
-    obj.log.df("saveWindowPositions: saved %d windows", #entries)
-    hs.alert.show(string.format("SpaceName: saved %d windows", #entries))
+
+    local steps = {}
+    local allSpaces = hs.spaces.allSpaces() or {}
+    for _, screen in ipairs(hs.screen.allScreens()) do
+        for _, id in ipairs(allSpaces[screen:getUUID()] or {}) do
+            if hs.spaces.spaceType(id) == "user" then
+                table.insert(steps, {
+                    screen = screen, space = id, visit = true,
+                })
+            end
+        end
+        -- come back to the space that was active when the walk started
+        table.insert(steps, {
+            screen = screen, space = hs.spaces.activeSpaceOnScreen(screen),
+        })
+    end
+
+    local i = 0
+    local nextStep
+    local function runStep(step)
+        if step.visit then
+            local ok, err = pcall(visit)
+            if not ok then
+                obj.log.ef("walkSpaces: %s", err)
+            end
+        end
+        nextStep()
+    end
+    nextStep = function()
+        i = i + 1
+        local step = steps[i]
+        if step == nil then
+            obj.walking = false
+            return done()
+        end
+        if hs.spaces.activeSpaceOnScreen(step.screen) == step.space then
+            return runStep(step)
+        end
+        local ok, err = hs.spaces.gotoSpace(step.space)
+        if not ok then
+            obj.log.ef("walkSpaces: cannot switch to space %s: %s",
+                step.space, err)
+            return nextStep()
+        end
+        obj.walkTimer = hs.timer.doAfter(obj.spaceSwitchDelay,
+            function() runStep(step) end)
+    end
+
+    obj.walking = true
+    nextStep()
+end
+
+--- Save positions and screens of all windows on all spaces to
+--- obj.windowsFile.
+function obj:_saveWindowPositions()
+    local entries, seen = {}, {}
+    obj:_walkSpaces(function()
+        for _, win in ipairs(hs.window.allWindows()) do
+            local entry = obj:_getWindowEntry(win)
+            if entry ~= nil and not seen[entry.id] then
+                seen[entry.id] = true
+                table.insert(entries, entry)
+            end
+        end
+    end, function()
+        if not hs.json.write(entries, obj.windowsFile, true, true) then
+            obj.log.ef("saveWindowPositions: cannot write %s",
+                obj.windowsFile)
+            hs.alert.show("SpaceName: cannot save window positions")
+            return
+        end
+        obj.log.df("saveWindowPositions: saved %d windows", #entries)
+        hs.alert.show(string.format("SpaceName: saved %d windows", #entries))
+    end)
 end
 
 --- Matchers ordered from strict to loose: by window id (same session),
@@ -244,12 +318,14 @@ end
 --- entries before the next, looser one, so a window matched by id is
 --- not taken by an app-only match of an earlier entry.
 --- @param entries table Array of saved window entries
+--- @param skip table Set of window ids to leave out
 --- @return table Map from entry to hs.window object
-function obj:_matchWindows(entries)
+function obj:_matchWindows(entries, skip)
     local candidates = {}
     for _, win in ipairs(hs.window.allWindows()) do
         local app = win:application()
-        if win:isStandard() and app ~= nil then
+        local id = win:id()
+        if win:isStandard() and app ~= nil and id ~= nil and not skip[id] then
             table.insert(candidates, { win = win, app = appKey(app) })
         end
     end
@@ -265,8 +341,21 @@ function obj:_matchWindows(entries)
     return matched
 end
 
---- Restore positions and screens of windows from obj.windowsFile.
---- Entries whose screen is not connected are skipped.
+--- Move a window to the frame saved relative to the screen.
+--- @param win table hs.window object
+--- @param entry table Saved window entry
+--- @param screen table hs.screen object the entry was saved on
+local function applyWindowEntry(win, entry, screen)
+    local origin = screen:fullFrame()
+    win:setFrame({
+        x = origin.x + entry.frame.x, y = origin.y + entry.frame.y,
+        w = entry.frame.w, h = entry.frame.h,
+    })
+end
+
+--- Restore positions and screens of windows from obj.windowsFile on all
+--- spaces. Windows stay on their current space. Entries whose screen is
+--- not connected are skipped.
 function obj:_restoreWindowPositions()
     local ok, entries = pcall(hs.json.read, obj.windowsFile)
     if not ok or type(entries) ~= "table" then
@@ -279,30 +368,34 @@ function obj:_restoreWindowPositions()
     for _, screen in ipairs(hs.screen.allScreens()) do
         screens[screen:getUUID()] = screen
     end
-    local restorable = {}
+    local pending = {}
     for _, entry in ipairs(entries) do
         if screens[entry.screen] ~= nil then
-            table.insert(restorable, entry)
+            table.insert(pending, entry)
         end
     end
 
-    local restored = 0
-    local matched = obj:_matchWindows(restorable)
-    for _, entry in ipairs(restorable) do
-        local win = matched[entry]
-        if win ~= nil then
-            local origin = screens[entry.screen]:fullFrame()
-            win:setFrame({
-                x = origin.x + entry.frame.x, y = origin.y + entry.frame.y,
-                w = entry.frame.w, h = entry.frame.h,
-            })
-            restored = restored + 1
+    local restored, handled = 0, {}
+    obj:_walkSpaces(function()
+        local matched = obj:_matchWindows(pending, handled)
+        local rest = {}
+        for _, entry in ipairs(pending) do
+            local win = matched[entry]
+            if win == nil then
+                table.insert(rest, entry)
+            else
+                handled[win:id()] = true
+                applyWindowEntry(win, entry, screens[entry.screen])
+                restored = restored + 1
+            end
         end
-    end
-    obj.log.df("restoreWindowPositions: restored %d of %d windows",
-        restored, #entries)
-    hs.alert.show(string.format(
-        "SpaceName: restored %d of %d windows", restored, #entries))
+        pending = rest
+    end, function()
+        obj.log.df("restoreWindowPositions: restored %d of %d windows",
+            restored, #entries)
+        hs.alert.show(string.format(
+            "SpaceName: restored %d of %d windows", restored, #entries))
+    end)
 end
 
 --- Create and return a table of menu items for all spaces.

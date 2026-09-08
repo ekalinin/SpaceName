@@ -12,6 +12,8 @@
 --   * menu items follow hs.screen.allScreens() order, not pairs() order
 --   * window positions are saved relative to the screen and restored by
 --     window id, then by app and title, then by app only
+--   * save and restore visit every user space on every screen and come
+--     back to the spaces that were active before
 
 local spoonPath = arg[1] or "init.lua"
 
@@ -25,6 +27,9 @@ local dialogAnswer = { "Cancel", "" }
 local windows = {}      -- hs.window.allWindows() result
 local files = {}        -- hs.json.write() destination
 local lastAlert = nil
+local timers = {}       -- hs.timer.doAfter() callbacks, run by flushTimers()
+local visited = {}      -- hs.spaces.gotoSpace() calls
+local failSpace = nil   -- hs.spaces.gotoSpace() fails for this space
 
 local function noop() end
 
@@ -36,8 +41,9 @@ local function newScreen(uuid, name, fullFrame)
     }
 end
 
-local function newWindow(id, app, title, screen, frame, standard)
+local function newWindow(id, app, title, screen, frame, standard, space)
     local win = {
+        space = space,
         id = function() return id end,
         title = function() return title end,
         isStandard = function() return standard ~= false end,
@@ -77,6 +83,23 @@ local function findDisplay(uuid)
         end
     end
     return nil
+end
+
+local function findSpace(spaceId)
+    for _, display in ipairs(displays) do
+        for _, space in ipairs(display.Spaces) do
+            if space.ManagedSpaceID == spaceId then
+                return space, display
+            end
+        end
+    end
+    return nil
+end
+
+local function isSpaceVisible(spaceId)
+    local _, display = findSpace(spaceId)
+    return display ~= nil
+        and display["Current Space"].ManagedSpaceID == spaceId
 end
 
 local function spacesForUuid(uuid)
@@ -119,13 +142,45 @@ hs = {
             end
             return display["Current Space"].ManagedSpaceID
         end,
-        gotoSpace = noop,
+        gotoSpace = function(spaceId)
+            local space, display = findSpace(spaceId)
+            if space == nil or spaceId == failSpace then
+                return nil, "cannot switch"
+            end
+            table.insert(visited, spaceId)
+            display["Current Space"] = space
+            return true
+        end,
+        spaceType = function(spaceId)
+            local space = findSpace(spaceId)
+            if space == nil then
+                return nil, "space not found"
+            end
+            return space.type == 4 and "fullscreen" or "user"
+        end,
         watcher = {
             new = function() return { start = noop, stop = noop } end,
         },
     },
     screen = { allScreens = function() return screens end },
-    window = { allWindows = function() return windows end },
+    window = {
+        -- like the real function, only windows on visible spaces
+        allWindows = function()
+            local result = {}
+            for _, win in ipairs(windows) do
+                if win.space == nil or isSpaceVisible(win.space) then
+                    table.insert(result, win)
+                end
+            end
+            return result
+        end,
+    },
+    timer = {
+        doAfter = function(_, fn)
+            table.insert(timers, fn)
+            return { stop = noop }
+        end,
+    },
     json = {
         write = function(data, path) files[path] = data; return true end,
         read = function(path) return files[path] end,
@@ -169,8 +224,29 @@ local function check(name, got, want)
         name, tostring(got), tostring(want)))
 end
 
-local function space(id, uuid)
-    return { ManagedSpaceID = id, id64 = id, type = 0, uuid = uuid }
+local function space(id, uuid, fullscreen)
+    return {
+        ManagedSpaceID = id, id64 = id, uuid = uuid,
+        type = fullscreen and 4 or 0,
+    }
+end
+
+-- Run space switch callbacks until the walk over spaces is finished.
+local function flushTimers()
+    while #timers > 0 do
+        local fn = table.remove(timers, 1)
+        fn()
+    end
+end
+
+local function saveWindows()
+    obj:_saveWindowPositions()
+    flushTimers()
+end
+
+local function restoreWindows()
+    obj:_restoreWindowPositions()
+    flushTimers()
 end
 
 local function display(uuid, spaces, currentId)
@@ -306,7 +382,7 @@ local popup = newWindow(13, "com.iterm2", "", extScreen,
     frame(0, 0, 100, 10), false)
 windows = { term, notes, popup }
 
-obj:_saveWindowPositions()
+saveWindows()
 local saved = files[obj.windowsFile]
 check("T5a save writes to obj.windowsFile",
     obj.windowsFile, "/tmp/hammerspoon/SpaceName.windows.json")
@@ -324,7 +400,7 @@ extScreen = newScreen("EXT-UUID", "External", frame(1440, 0, 2560, 1440))
 screens = { mainScreen, extScreen }
 term = newWindow(11, "com.iterm2", "zsh", mainScreen, frame(0, 0, 800, 600))
 windows = { term, notes }
-obj:_restoreWindowPositions()
+restoreWindows()
 check("T5h window follows the screen (x)", term.moved.x, 1540)
 check("T5i window follows the screen (y)", term.moved.y, 50)
 check("T5j window size is restored", term.moved.w, 800)
@@ -334,14 +410,14 @@ check("T5k restore shows a summary",
 -- "app restart": ids changed, title matches
 term = newWindow(99, "com.iterm2", "zsh", mainScreen, frame(0, 0, 10, 10))
 windows = { term }
-obj:_restoreWindowPositions()
+restoreWindows()
 check("T5l window matched by app and title", term.moved.x, 1540)
 
 -- "reboot": ids and titles changed, only the app matches
 term = newWindow(98, "com.iterm2", "~ (bash)", mainScreen,
     frame(0, 0, 10, 10))
 windows = { term }
-obj:_restoreWindowPositions()
+restoreWindows()
 check("T5m window matched by app only", term.moved.x, 1540)
 
 -- same id but another app: the id is stale, fall back to app matching
@@ -350,7 +426,7 @@ local swappedA = newWindow(12, "com.iterm2", "zsh", mainScreen,
 local swappedB = newWindow(11, "md.obsidian", "Notes", mainScreen,
     frame(0, 0, 10, 10))
 windows = { swappedA, swappedB }
-obj:_restoreWindowPositions()
+restoreWindows()
 check("T5n stale id does not move a window of another app",
     swappedA.moved.x, 1540)
 check("T5o stale id does not move a window of another app",
@@ -368,7 +444,7 @@ files[obj.windowsFile] = {
     { id = 12, app = "com.iterm2", title = "zsh", screen = "MAIN-UUID",
       frame = frame(2, 2, 10, 10) },
 }
-obj:_restoreWindowPositions()
+restoreWindows()
 check("T5p id match wins over title match (first entry)", byIdB.moved.x, 1)
 check("T5q id match wins over title match (second entry)", byIdA.moved.x, 2)
 
@@ -377,14 +453,14 @@ screens = { mainScreen }
 term = newWindow(11, "com.iterm2", "zsh", mainScreen, frame(0, 0, 10, 10))
 windows = { term }
 files[obj.windowsFile] = saved
-obj:_restoreWindowPositions()
+restoreWindows()
 check("T5r window on a missing screen is skipped", term.moved, nil)
 check("T5s missing screen is reported",
     lastAlert, "SpaceName: restored 0 of 2 windows")
 
 -- nothing saved yet
 files[obj.windowsFile] = nil
-obj:_restoreWindowPositions()
+restoreWindows()
 check("T5t restore without a file is reported",
     lastAlert, "SpaceName: no saved window positions")
 
@@ -392,6 +468,92 @@ local titles = menuTitles(obj:_getMenuItems())
 check("T5u save menu item exists", titles["Save window positions"], true)
 check("T5v restore menu item exists",
     titles["Restore window positions"], true)
+
+-- Test 6: every user space on every screen is visited --------------------
+-- main: space 1 (active), 7, 8 (fullscreen); ext: 21, 22 (active)
+
+screens = { mainScreen, extScreen }
+displays = {
+    display("MAIN-UUID",
+        { space(1, ""), space(7, "AAA"), space(8, "FFF", true) }, 1),
+    display("EXT-UUID", { space(21, "CCC"), space(22, "DDD") }, 22),
+}
+local here = newWindow(31, "com.apple.Safari", "Docs", mainScreen,
+    frame(10, 10, 500, 400), true, 1)
+local away = newWindow(32, "md.obsidian", "Notes", mainScreen,
+    frame(20, 20, 600, 500), true, 7)
+local extHere = newWindow(33, "com.iterm2", "zsh", extScreen,
+    frame(1500, 100, 800, 600), true, 22)
+local extAway = newWindow(34, "com.iterm2", "logs", extScreen,
+    frame(1600, 200, 800, 600), true, 21)
+windows = { here, away, extHere, extAway }
+files = {}
+visited = {}
+
+obj:_saveWindowPositions()
+obj:_saveWindowPositions()
+check("T6a second call during the walk is rejected",
+    lastAlert, "SpaceName: busy, try again later")
+flushTimers()
+saved = files[obj.windowsFile]
+check("T6b windows on all spaces are saved", #saved, 4)
+check("T6c save shows a summary", lastAlert, "SpaceName: saved 4 windows")
+check("T6d other user spaces are visited, fullscreen ones are not, "
+    .. "and the active ones are restored",
+    table.concat(visited, ","), "7,1,21,22")
+check("T6e main screen is back on its space",
+    displays[1]["Current Space"].ManagedSpaceID, 1)
+check("T6f external screen is back on its space",
+    displays[2]["Current Space"].ManagedSpaceID, 22)
+local extCount = 0
+for _, entry in ipairs(saved) do
+    if entry.id == 33 then extCount = extCount + 1 end
+end
+check("T6g a window visible during several visits is saved once",
+    extCount, 1)
+
+visited = {}
+restoreWindows()
+check("T6h window on another space is restored", away.moved.x, 20)
+check("T6i window on another space of the external screen is restored",
+    extAway.moved.x, 1600)
+check("T6j restore shows a summary",
+    lastAlert, "SpaceName: restored 4 of 4 windows")
+check("T6k restore visits the same spaces",
+    table.concat(visited, ","), "7,1,21,22")
+
+-- a window positioned during an earlier visit stays visible on its
+-- screen and must not be taken by an app-only match later
+files[obj.windowsFile] = {
+    { id = 1, app = "com.iterm2", title = "zsh", screen = "EXT-UUID",
+      frame = frame(60, 0, 10, 10) },
+    { id = 2, app = "com.iterm2", title = "logs", screen = "MAIN-UUID",
+      frame = frame(160, 0, 10, 10) },
+}
+local termX = newWindow(91, "com.iterm2", "zsh", extScreen,
+    frame(0, 0, 10, 10), true, 22)
+local termY = newWindow(92, "com.iterm2", "xyz", mainScreen,
+    frame(0, 0, 10, 10), true, 7)
+windows = { termX, termY }
+restoreWindows()
+check("T6l window matched on an earlier visit keeps its position",
+    termX.moved.x, 1500)
+check("T6m remaining entry goes to the remaining window", termY.moved.x, 160)
+
+-- a space that cannot be switched to is skipped
+windows = { here, away, extHere, extAway }
+files[obj.windowsFile] = saved
+visited = {}
+failSpace = 21
+extAway.moved = nil
+restoreWindows()
+failSpace = nil
+check("T6n unreachable space is skipped",
+    table.concat(visited, ","), "7,1")
+check("T6o window on the unreachable space is not moved",
+    extAway.moved, nil)
+check("T6p restore reports the skipped window",
+    lastAlert, "SpaceName: restored 3 of 4 windows")
 
 -- Summary -------------------------------------------------------------------
 
