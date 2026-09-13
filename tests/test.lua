@@ -14,6 +14,8 @@
 --     window id, then by app and title, then by app only
 --   * save and restore visit every user space on every screen and come
 --     back to the spaces that were active before
+--   * the walk waits for a space to really become active and does not
+--     hang when it never does
 
 local spoonPath = arg[1] or "init.lua"
 
@@ -30,6 +32,8 @@ local lastAlert = nil
 local timers = {}       -- hs.timer.doAfter() callbacks, run by flushTimers()
 local visited = {}      -- hs.spaces.gotoSpace() calls
 local failSpace = nil   -- hs.spaces.gotoSpace() fails for this space
+local switchLag = 0     -- timer ticks before a switch takes effect
+local pendingSwitch = nil
 
 local function noop() end
 
@@ -142,13 +146,20 @@ hs = {
             end
             return display["Current Space"].ManagedSpaceID
         end,
+        -- like the real function, the switch takes effect later
         gotoSpace = function(spaceId)
             local space, display = findSpace(spaceId)
             if space == nil or spaceId == failSpace then
                 return nil, "cannot switch"
             end
             table.insert(visited, spaceId)
-            display["Current Space"] = space
+            if switchLag <= 0 then
+                display["Current Space"] = space
+                return true
+            end
+            pendingSwitch = {
+                display = display, space = space, ticks = switchLag,
+            }
             return true
         end,
         spaceType = function(spaceId)
@@ -232,9 +243,18 @@ local function space(id, uuid, fullscreen)
 end
 
 -- Run space switch callbacks until the walk over spaces is finished.
+-- Every tick moves a pending space switch one step closer to taking
+-- effect, so a switch that needs several polls can be modelled.
 local function flushTimers()
     while #timers > 0 do
         local fn = table.remove(timers, 1)
+        if pendingSwitch ~= nil then
+            pendingSwitch.ticks = pendingSwitch.ticks - 1
+            if pendingSwitch.ticks <= 0 then
+                pendingSwitch.display["Current Space"] = pendingSwitch.space
+                pendingSwitch = nil
+            end
+        end
         fn()
     end
 end
@@ -554,6 +574,37 @@ check("T6o window on the unreachable space is not moved",
     extAway.moved, nil)
 check("T6p restore reports the skipped window",
     lastAlert, "SpaceName: restored 3 of 4 windows")
+
+-- Test 7: the walk waits for a space to really become active -------------
+
+screens = { mainScreen }
+displays = { display("MAIN-UUID", { space(1, ""), space(7, "AAA") }, 1) }
+local away2 = newWindow(41, "com.apple.Safari", "Docs", mainScreen,
+    frame(10, 10, 500, 400), true, 7)
+windows = { away2 }
+files = {}
+visited = {}
+
+-- a switch that needs several polls: a single fixed pause would visit
+-- the space too early and save nothing
+switchLag = 3
+saveWindows()
+switchLag = 0
+check("T7a a slow switch is awaited", #files[obj.windowsFile], 1)
+check("T7b the walk comes back to the space it started on",
+    displays[1]["Current Space"].ManagedSpaceID, 1)
+
+-- a switch that never takes effect must not hang the walk
+switchLag = 1000
+obj.spaceSwitchTimeout = 0.2
+files = {}
+saveWindows()
+obj.spaceSwitchTimeout = 5
+switchLag = 0
+pendingSwitch = nil
+check("T7c a stuck switch times out and the walk still finishes",
+    lastAlert, "SpaceName: saved 0 windows")
+check("T7d the busy flag is cleared after a timeout", obj.walking, false)
 
 -- Summary -------------------------------------------------------------------
 

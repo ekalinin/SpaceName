@@ -21,7 +21,9 @@ obj.log = hs.logger.new('SpaceName', 'debug')
 obj.settingName = "spacenames.state."
 obj.settingNameMonitorMode = obj.settingName .. "MonitorMode"
 obj.windowsFile = hs.configdir .. "/SpaceName.windows.json"
-obj.spaceSwitchDelay = 1
+obj.spacePollInterval = 0.05
+obj.spaceSwitchTimeout = 5
+obj.spaceSettleDelay = 0.2
 obj.menu = nil
 obj.watcher = nil
 obj.walking = false
@@ -197,6 +199,34 @@ function obj:_getWindowEntry(win)
     }
 end
 
+--- Wait until a screen really shows a space. `hs.spaces.gotoSpace()`
+--- returns once the Mission Control button is pressed, but macOS reports
+--- the new space only after the switch is over, so the space is polled
+--- instead of pausing for a fixed time.
+--- @param screen table hs.screen object
+--- @param spaceId number The space that is being switched to
+--- @param done function Called when the space is shown, or on timeout
+function obj:_waitForSpace(screen, spaceId, done)
+    local polls = 0
+    local maxPolls = math.ceil(obj.spaceSwitchTimeout / obj.spacePollInterval)
+    local poll
+    poll = function()
+        if hs.spaces.activeSpaceOnScreen(screen) == spaceId then
+            -- give the window list a moment to catch up with the space
+            obj.walkTimer = hs.timer.doAfter(obj.spaceSettleDelay, done)
+            return
+        end
+        polls = polls + 1
+        if polls >= maxPolls then
+            obj.log.wf("waitForSpace: space %s is not active after %ss",
+                spaceId, obj.spaceSwitchTimeout)
+            return done()
+        end
+        obj.walkTimer = hs.timer.doAfter(obj.spacePollInterval, poll)
+    end
+    obj.walkTimer = hs.timer.doAfter(obj.spacePollInterval, poll)
+end
+
 --- Visit every user space on every screen. macOS only reports windows
 --- on the spaces shown right now, so `visit()` is called while each
 --- space is shown, and `done()` after the spaces that were active at
@@ -253,7 +283,7 @@ function obj:_walkSpaces(visit, done)
                 step.space, err)
             return nextStep()
         end
-        obj.walkTimer = hs.timer.doAfter(obj.spaceSwitchDelay,
+        obj:_waitForSpace(step.screen, step.space,
             function() runStep(step) end)
     end
 
