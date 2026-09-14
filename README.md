@@ -4,6 +4,7 @@ Main features:
 - shows current space id in the menu bar
 - default name can be changed
 - switch to space by name or id from menu
+- save and restore positions of all windows on all screens
 
 ## Table of Contents
 
@@ -13,6 +14,7 @@ Main features:
     * [Show all spaces](#show-all-spaces)
     * [Set custom name](#set-custom-name)
     * [Switch to space by id or name](#switch-to-space-by-id-or-name)
+    * [Save and restore window positions](#save-and-restore-window-positions)
   * [Tests](#tests)
 
 ### Installation
@@ -79,6 +81,41 @@ Menu text will change:
 Click on the space id (or name) to show all available spaces and select one to switch:
 
 ![Switch to space](assets/04.switch.png)
+
+#### Save and restore window positions
+
+Choose "Save window positions" to write the position, size and screen of
+every window of every application on all screens and all spaces to
+`~/.hammerspoon/SpaceName.windows.json`. Choose "Restore window positions"
+to move the windows back. Windows stay on the space they are on.
+
+macOS reports only the windows on the spaces shown right now, so both
+actions visit every space on every screen through Mission Control and then
+come back to the spaces that were active before. Spaces of full screen
+applications are skipped. Every switch is awaited until macOS reports the
+new space, which takes well under a second per space, so do not use the
+mouse or keyboard until the summary alert appears. Enabling "Reduce motion"
+in System Settings -> Accessibility -> Display makes the switches faster.
+
+Positions are stored relative to the screen, so windows follow their
+screen even if the arrangement of displays changed. Windows whose screen
+is not connected are left where they are. A window is matched to a saved
+entry by application and window id, then by application and window title,
+then by application only, so restore also works after applications or the
+system were restarted.
+
+The file location and the timings of the walk (in seconds) can be changed
+after loading the spoon:
+
+```lua
+spaceName.windowsFile = os.getenv("HOME") .. "/windows.json"
+-- how often a switch is checked for completion
+spaceName.spacePollInterval = 0.05
+-- how long a single switch may take before it is given up on
+spaceName.spaceSwitchTimeout = 5
+-- pause after a space is shown, before its windows are read
+spaceName.spaceSettleDelay = 0.2
+```
 
 ### Tests
 
