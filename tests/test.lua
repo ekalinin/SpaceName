@@ -652,6 +652,27 @@ check("T8h multi monitor mode numbers every screen on its own",
     lastTitle, "2: Work | 1: Mail")
 hs.settings.set("spacenames.state.MonitorMode", "0")
 
+local function findItem(menuItems, title)
+    for _, item in ipairs(menuItems) do
+        if item.title == title then
+            return item
+        end
+    end
+    return {}
+end
+
+mouseScreen = mainScreen
+obj:_setBarMode("name")
+local barMenu = findItem(obj:_getMenuItems(), "Show in bar").menu or {}
+check("T8i show in bar has three modes", #barMenu, 3)
+check("T8j current mode is checked", findItem(barMenu, "Name").checked, true)
+check("T8k other modes are not checked",
+    findItem(barMenu, "Number").checked, false)
+local chooseBoth = findItem(barMenu, "Number and name").fn
+if chooseBoth then chooseBoth() end
+check("T8l choosing a mode saves it", obj:_getBarMode(), "both")
+check("T8m choosing a mode updates the bar", lastTitle, "2: Work")
+
 -- Summary -------------------------------------------------------------------
 
 if failures > 0 then

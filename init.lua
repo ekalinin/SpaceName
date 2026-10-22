@@ -480,8 +480,8 @@ end
 
 --- Create and return a table of menu items for all spaces.
 --- Builds menu items for switching between spaces, setting names,
---- toggling monitor mode, saving and restoring window positions, and
---- version info.
+--- toggling monitor mode, choosing what the menu bar shows, saving and
+--- restoring window positions, and version info.
 --- @return table Array of menu item tables with title, fn, checked, and disabled fields
 function obj:_getMenuItems()
     obj.log.d("getMenuItems: starting ...")
@@ -529,6 +529,20 @@ function obj:_getMenuItems()
         fn = function() obj:_toggleMonitorMode(); obj:_updateMenu() end,
         checked = obj:_isMultiMonitorMode()
     })
+    local barMode = obj:_getBarMode()
+    local barMenu = {}
+    for _, item in ipairs({
+        { mode = "name", title = "Name" },
+        { mode = "number", title = "Number" },
+        { mode = "both", title = "Number and name" },
+    }) do
+        table.insert(barMenu, {
+            title = item.title,
+            fn = function() obj:_setBarMode(item.mode); obj:_updateMenu() end,
+            checked = item.mode == barMode,
+        })
+    end
+    table.insert(res, { title = "Show in bar", menu = barMenu })
     table.insert(res, { title = "-" })
     table.insert(res, {
         title = "Save window positions", fn = obj._saveWindowPositions

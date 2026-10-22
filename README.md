@@ -55,6 +55,14 @@ Or current space name if it set (see below):
 
 ![Menu bar with current space id or name](assets/01.current.space.name.png)
 
+Choose "Show in bar" in the menu to select what the menu bar shows:
+
+- "Name" - the name, or the space id if no name is set (default)
+- "Number" - the position of the space on its screen, as in the menu
+- "Number and name" - for example `2: Work`, or only `2` if no name is set
+
+In multi monitor mode every screen is numbered on its own.
+
 #### Show all spaces
 
 Click on the space id (or name) to show all available spaces:
