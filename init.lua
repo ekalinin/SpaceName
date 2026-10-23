@@ -124,6 +124,28 @@ function obj:_getSpaceNumber(screen, spaceId)
     return nil
 end
 
+--- Switch to a space by its position on the screen under the mouse
+--- cursor, counted like in the menu.
+--- @param number number 1-based position of the space
+function obj:_gotoSpaceNumber(number)
+    local screen = hs.mouse.getCurrentScreen()
+    local allSpaces = hs.spaces.allSpaces() or {}
+    local spaceId = (allSpaces[screen:getUUID()] or {})[number]
+    if spaceId == nil then
+        obj.log.wf("gotoSpaceNumber: no space %d on screen %s",
+            number, screen:name())
+        return
+    end
+    if spaceId == hs.spaces.activeSpaceOnScreen(screen) then
+        return
+    end
+    local ok, err = hs.spaces.gotoSpace(spaceId)
+    if not ok then
+        obj.log.ef("gotoSpaceNumber: cannot switch to space %s: %s",
+            spaceId, err)
+    end
+end
+
 --- Get the menu bar text for the active space of a screen: the name (or
 --- ID), the number, or both, depending on the bar mode.
 --- @param screen table hs.screen object
@@ -611,6 +633,13 @@ function obj:bindHotkeys(mapping)
         set = hs.fnutils.partial(self._setSpaceName, self),
         show = function() obj.menu:popupMenu(hs.mouse.absolutePosition()) end,
      }
+     -- spaceN switches to the N-th space of the screen under the mouse
+     for name in pairs(mapping) do
+         local number = tonumber(string.match(name, "^space(%d+)$"))
+         if number ~= nil then
+             def[name] = function() obj:_gotoSpaceNumber(number) end
+         end
+     end
 
      hs.spoons.bindHotkeysToSpec(def, mapping)
      return self
