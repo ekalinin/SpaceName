@@ -16,6 +16,7 @@
 --     back to the spaces that were active before
 --   * the walk waits for a space to really become active and does not
 --     hang when it never does
+--   * the menu bar shows the name, the space number or both
 
 local spoonPath = arg[1] or "init.lua"
 
@@ -34,6 +35,7 @@ local visited = {}      -- hs.spaces.gotoSpace() calls
 local failSpace = nil   -- hs.spaces.gotoSpace() fails for this space
 local switchLag = 0     -- timer ticks before a switch takes effect
 local pendingSwitch = nil
+local lastTitle = nil   -- last hs.menubar setTitle() value
 
 local function noop() end
 
@@ -204,8 +206,8 @@ hs = {
     menubar = {
         new = function()
             return {
-                setTitle = noop, setMenu = noop,
-                delete = noop, popupMenu = noop,
+                setTitle = function(_, title) lastTitle = title end,
+                setMenu = noop, delete = noop, popupMenu = noop,
             }
         end,
     },
@@ -605,6 +607,71 @@ pendingSwitch = nil
 check("T7c a stuck switch times out and the walk still finishes",
     lastAlert, "SpaceName: saved 0 windows")
 check("T7d the busy flag is cleared after a timeout", obj.walking, false)
+
+-- Test 8: the menu bar shows the name, the number or both -----------------
+
+settings = {}
+screens = { mainScreen }
+mouseScreen = mainScreen
+displays = { display("MAIN-UUID",
+    { space(1, ""), space(7, "AAA"), space(9, "BBB") }, 7) }
+setName("Work")
+check("T8a default mode is name", obj:_getBarMode(), "name")
+check("T8b name mode shows the name", lastTitle, "Work")
+
+obj:_setBarMode("number")
+obj:_updateMenu()
+check("T8c number mode shows the position on the screen", lastTitle, "2")
+
+obj:_setBarMode("both")
+obj:_updateMenu()
+check("T8d both mode shows the number and the name", lastTitle, "2: Work")
+
+displays[1]["Current Space"] = displays[1].Spaces[3]
+obj:_updateMenu()
+check("T8e both mode shows only the number without a name", lastTitle, "3")
+
+obj:_setBarMode("name")
+obj:_updateMenu()
+check("T8f name mode shows the id without a name", lastTitle, 9)
+
+hs.settings.set("spacenames.state.BarMode", "bogus")
+check("T8g unknown mode falls back to name", obj:_getBarMode(), "name")
+
+screens = { mainScreen, extScreen }
+displays = {
+    display("MAIN-UUID", { space(1, ""), space(7, "AAA") }, 7),
+    display("EXT-UUID", { space(21, "CCC"), space(22, "DDD") }, 21),
+}
+mouseScreen = extScreen
+setName("Mail")
+hs.settings.set("spacenames.state.MonitorMode", "1")
+obj:_setBarMode("both")
+obj:_updateMenu()
+check("T8h multi monitor mode numbers every screen on its own",
+    lastTitle, "2: Work | 1: Mail")
+hs.settings.set("spacenames.state.MonitorMode", "0")
+
+local function findItem(menuItems, title)
+    for _, item in ipairs(menuItems) do
+        if item.title == title then
+            return item
+        end
+    end
+    return {}
+end
+
+mouseScreen = mainScreen
+obj:_setBarMode("name")
+local barMenu = findItem(obj:_getMenuItems(), "Show in bar").menu or {}
+check("T8i show in bar has three modes", #barMenu, 3)
+check("T8j current mode is checked", findItem(barMenu, "Name").checked, true)
+check("T8k other modes are not checked",
+    findItem(barMenu, "Number").checked, false)
+local chooseBoth = findItem(barMenu, "Number and name").fn
+if chooseBoth then chooseBoth() end
+check("T8l choosing a mode saves it", obj:_getBarMode(), "both")
+check("T8m choosing a mode updates the bar", lastTitle, "2: Work")
 
 -- Summary -------------------------------------------------------------------
 

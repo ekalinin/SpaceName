@@ -20,6 +20,7 @@ obj.license = "MIT - https://opensource.org/licenses/MIT"
 obj.log = hs.logger.new('SpaceName', 'debug')
 obj.settingName = "spacenames.state."
 obj.settingNameMonitorMode = obj.settingName .. "MonitorMode"
+obj.settingNameBarMode = obj.settingName .. "BarMode"
 obj.windowsFile = hs.configdir .. "/SpaceName.windows.json"
 obj.spacePollInterval = 0.05
 obj.spaceSwitchTimeout = 5
@@ -109,14 +110,47 @@ function obj:_getSpaceIdOrNameForCurrentSpace()
     return spaceName
 end
 
---- Get all active space names/IDs across all screens, joined by " | ".
---- @return string Concatenated space names separated by " | "
+--- Get the position of a space on its screen, counted like in the menu.
+--- @param screen table hs.screen object
+--- @param spaceId number The space ID to look up
+--- @return number|nil 1-based position, or nil if the space is not found
+function obj:_getSpaceNumber(screen, spaceId)
+    local allSpaces = hs.spaces.allSpaces() or {}
+    for i, id in ipairs(allSpaces[screen:getUUID()] or {}) do
+        if id == spaceId then
+            return i
+        end
+    end
+    return nil
+end
+
+--- Get the menu bar text for the active space of a screen: the name (or
+--- ID), the number, or both, depending on the bar mode.
+--- @param screen table hs.screen object
+--- @return string|number The text to show
+function obj:_getActiveSpaceTitle(screen)
+    local spaceId = hs.spaces.activeSpaceOnScreen(screen)
+    local spaceName = obj:_getSpaceIdOrNameBySpaceId(spaceId)
+    local mode = obj:_getBarMode()
+    if mode == "name" then
+        return spaceName
+    end
+    local number = obj:_getSpaceNumber(screen, spaceId)
+    if number == nil then
+        return spaceName
+    end
+    if mode == "number" or spaceName == spaceId then
+        return tostring(number)
+    end
+    return string.format("%d: %s", number, spaceName)
+end
+
+--- Get the menu bar texts of the active spaces on all screens, joined by " | ".
+--- @return string Concatenated texts separated by " | "
 function obj:_getAllActiveSpaceNames()
     local names = {}
     for _, screen in ipairs(hs.screen.allScreens()) do
-        local spaceId = hs.spaces.activeSpaceOnScreen(screen)
-        local spaceName = obj:_getSpaceIdOrNameBySpaceId(spaceId)
-        table.insert(names, spaceName)
+        table.insert(names, obj:_getActiveSpaceTitle(screen))
     end
     return table.concat(names, " | ")
 end
@@ -163,6 +197,22 @@ end
 function obj:_isMultiMonitorMode()
     local mode = hs.settings.get(obj.settingNameMonitorMode)
     return mode == "1"
+end
+
+--- Get what the menu bar shows for the active space.
+--- @return string "name", "number" or "both"
+function obj:_getBarMode()
+    local mode = hs.settings.get(obj.settingNameBarMode)
+    if mode == "number" or mode == "both" then
+        return mode
+    end
+    return "name"
+end
+
+--- Set what the menu bar shows for the active space.
+--- @param mode string "name", "number" or "both"
+function obj:_setBarMode(mode)
+    hs.settings.set(obj.settingNameBarMode, mode)
 end
 
 --- Get the key used to match a window with a saved entry.
@@ -430,8 +480,8 @@ end
 
 --- Create and return a table of menu items for all spaces.
 --- Builds menu items for switching between spaces, setting names,
---- toggling monitor mode, saving and restoring window positions, and
---- version info.
+--- toggling monitor mode, choosing what the menu bar shows, saving and
+--- restoring window positions, and version info.
 --- @return table Array of menu item tables with title, fn, checked, and disabled fields
 function obj:_getMenuItems()
     obj.log.d("getMenuItems: starting ...")
@@ -479,6 +529,20 @@ function obj:_getMenuItems()
         fn = function() obj:_toggleMonitorMode(); obj:_updateMenu() end,
         checked = obj:_isMultiMonitorMode()
     })
+    local barMode = obj:_getBarMode()
+    local barMenu = {}
+    for _, item in ipairs({
+        { mode = "name", title = "Name" },
+        { mode = "number", title = "Number" },
+        { mode = "both", title = "Number and name" },
+    }) do
+        table.insert(barMenu, {
+            title = item.title,
+            fn = function() obj:_setBarMode(item.mode); obj:_updateMenu() end,
+            checked = item.mode == barMode,
+        })
+    end
+    table.insert(res, { title = "Show in bar", menu = barMenu })
     table.insert(res, { title = "-" })
     table.insert(res, {
         title = "Save window positions", fn = obj._saveWindowPositions
@@ -497,7 +561,7 @@ end
 --- Refreshes the menubar display with the latest space names and menu structure.
 function obj:_updateMenu()
     obj.log.d("updateMenu: starting ...")
-    local menuText = obj:_getSpaceIdOrNameForCurrentSpace()
+    local menuText = obj:_getActiveSpaceTitle(hs.mouse.getCurrentScreen())
     if obj._isMultiMonitorMode() then
         menuText = obj:_getAllActiveSpaceNames()
     end;
