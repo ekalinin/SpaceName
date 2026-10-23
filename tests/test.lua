@@ -17,6 +17,7 @@
 --   * the walk waits for a space to really become active and does not
 --     hang when it never does
 --   * the menu bar shows the name, the space number or both
+--   * a failed switch from the menu is logged
 
 local spoonPath = arg[1] or "init.lua"
 
@@ -36,6 +37,7 @@ local failSpace = nil   -- hs.spaces.gotoSpace() fails for this space
 local switchLag = 0     -- timer ticks before a switch takes effect
 local pendingSwitch = nil
 local lastTitle = nil   -- last hs.menubar setTitle() value
+local errors = {}       -- messages logged with obj.log.ef()
 
 local function noop() end
 
@@ -71,6 +73,9 @@ local function newLogger()
     local methods = { "d", "df", "e", "ef", "i", "f", "w", "wf", "v", "vf" }
     for _, method in ipairs(methods) do
         logger[method] = noop
+    end
+    logger.ef = function(fmt, ...)
+        table.insert(errors, string.format(fmt, ...))
     end
     return logger
 end
@@ -672,6 +677,25 @@ local chooseBoth = findItem(barMenu, "Number and name").fn
 if chooseBoth then chooseBoth() end
 check("T8l choosing a mode saves it", obj:_getBarMode(), "both")
 check("T8m choosing a mode updates the bar", lastTitle, "2: Work")
+
+-- Test 9: a failed switch from the menu is logged ---------------------------
+
+settings = {}
+screens = { mainScreen }
+mouseScreen = mainScreen
+displays = { display("MAIN-UUID", { space(1, ""), space(7, "AAA") }, 1) }
+local switchTo = findItem(obj:_getMenuItems(), 7).fn or noop
+
+errors = {}
+failSpace = 7
+switchTo()
+failSpace = nil
+check("T9a failed switch is logged",
+    errors[1], "getMenuItems: cannot switch to space 7: cannot switch")
+
+errors = {}
+switchTo()
+check("T9b successful switch is not logged", #errors, 0)
 
 -- Summary -------------------------------------------------------------------
 

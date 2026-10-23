@@ -90,6 +90,18 @@ Click on the space id (or name) to show all available spaces and select one to s
 
 ![Switch to space](assets/04.switch.png)
 
+The switch goes through Mission Control: Hammerspoon opens it and presses
+the button of the space. If switching does not work reliably on your setup,
+increase `hs.spaces.MCwaitTime` (0.3 seconds by default), the time
+Hammerspoon waits for Mission Control to be ready, in
+`~/.hammerspoon/init.lua`:
+
+```lua
+hs.spaces.MCwaitTime = 0.5
+```
+
+A failed switch is logged to the Hammerspoon console.
+
 #### Save and restore window positions
 
 Choose "Save window positions" to write the position, size and screen of

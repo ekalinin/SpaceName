@@ -508,7 +508,13 @@ function obj:_getMenuItems()
 
             table.insert(res, {
                 title = spaceName,
-                fn = function() hs.spaces.gotoSpace(id) end,
+                fn = function()
+                    local ok, err = hs.spaces.gotoSpace(id)
+                    if not ok then
+                        obj.log.ef("getMenuItems: cannot switch to space %s: %s",
+                            id, err)
+                    end
+                end,
                 checked = id == spaceId,
                 disabled = id == spaceId
             })
