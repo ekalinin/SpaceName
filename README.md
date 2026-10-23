@@ -4,6 +4,7 @@ Main features:
 - shows current space id in the menu bar
 - default name can be changed
 - switch to space by name or id from menu
+- switch to space by number with a hotkey
 - save and restore positions of all windows on all screens
 
 ## Table of Contents
@@ -14,6 +15,7 @@ Main features:
     * [Show all spaces](#show-all-spaces)
     * [Set custom name](#set-custom-name)
     * [Switch to space by id or name](#switch-to-space-by-id-or-name)
+    * [Switch to space with a hotkey](#switch-to-space-with-a-hotkey)
     * [Save and restore window positions](#save-and-restore-window-positions)
   * [Tests](#tests)
 
@@ -36,7 +38,10 @@ if spaceName then
             -- hotkey to change current space's name
             set={{"ctrl"}, "n"},
             -- hotkey to show menu with all spaces
-            show={{"ctrl"}, "m"}
+            show={{"ctrl"}, "m"},
+            -- hotkeys to switch to the 1st and the 2nd space
+            space1={{"ctrl", "alt"}, "1"},
+            space2={{"ctrl", "alt"}, "2"}
         })
 end
 ```
@@ -101,6 +106,23 @@ hs.spaces.MCwaitTime = 0.5
 ```
 
 A failed switch is logged to the Hammerspoon console.
+
+#### Switch to space with a hotkey
+
+Bind `spaceN` in `bindHotkeys` to switch to the N-th space of the screen
+under the mouse cursor. Spaces are counted as in the menu and in the
+"Number" mode of the menu bar, so in multi monitor mode every screen is
+numbered on its own. Any number can be bound:
+
+```lua
+spaceName:bindHotkeys({
+    space1={{"ctrl", "alt"}, "1"},
+    space2={{"ctrl", "alt"}, "2"},
+    space10={{"ctrl", "alt"}, "0"}
+})
+```
+
+The switch goes through Mission Control, like the switch from the menu.
 
 #### Save and restore window positions
 

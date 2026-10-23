@@ -18,6 +18,8 @@
 --     hang when it never does
 --   * the menu bar shows the name, the space number or both
 --   * a failed switch from the menu is logged
+--   * a hotkey switches to a space by its number on the screen under the
+--     mouse cursor
 
 local spoonPath = arg[1] or "init.lua"
 
@@ -38,6 +40,7 @@ local switchLag = 0     -- timer ticks before a switch takes effect
 local pendingSwitch = nil
 local lastTitle = nil   -- last hs.menubar setTitle() value
 local errors = {}       -- messages logged with obj.log.ef()
+local hotkeys = {}      -- hs.spoons.bindHotkeysToSpec() definitions
 
 local function noop() end
 
@@ -225,7 +228,9 @@ hs = {
             return function(...) return fn(unpack(args), ...) end
         end,
     },
-    spoons = { bindHotkeysToSpec = noop },
+    spoons = {
+        bindHotkeysToSpec = function(def) hotkeys = def end,
+    },
 }
 
 -- Helpers -------------------------------------------------------------------
@@ -696,6 +701,60 @@ check("T9a failed switch is logged",
 errors = {}
 switchTo()
 check("T9b successful switch is not logged", #errors, 0)
+
+-- Test 10: a hotkey switches to a space by its number ---------------------
+
+settings = {}
+screens = { mainScreen, extScreen }
+displays = {
+    display("MAIN-UUID", { space(1, ""), space(7, "AAA") }, 1),
+    display("EXT-UUID", { space(21, "CCC"), space(22, "DDD") }, 21),
+}
+obj:bindHotkeys({
+    set = { { "ctrl" }, "n" },
+    space1 = { { "ctrl" }, "1" },
+    space2 = { { "ctrl" }, "2" },
+    space3 = { { "ctrl" }, "3" },
+})
+
+local function pressHotkey(name)
+    local fn = hotkeys[name] or noop
+    fn()
+end
+
+check("T10a every spaceN hotkey has an action",
+    type(hotkeys.space3), "function")
+check("T10b set hotkey is still bound", type(hotkeys.set), "function")
+
+mouseScreen = extScreen
+visited = {}
+pressHotkey("space2")
+check("T10c hotkey switches to the space on the screen under the mouse",
+    table.concat(visited, ","), "22")
+
+visited = {}
+pressHotkey("space2")
+check("T10d hotkey for the active space does not switch",
+    table.concat(visited, ","), "")
+
+visited = {}
+pressHotkey("space3")
+check("T10e hotkey for a missing space does not switch",
+    table.concat(visited, ","), "")
+
+mouseScreen = mainScreen
+visited = {}
+pressHotkey("space2")
+check("T10f spaces are numbered on every screen on its own",
+    table.concat(visited, ","), "7")
+
+mouseScreen = extScreen
+errors = {}
+failSpace = 21
+pressHotkey("space1")
+failSpace = nil
+check("T10g failed switch is logged",
+    errors[1], "gotoSpaceNumber: cannot switch to space 21: cannot switch")
 
 -- Summary -------------------------------------------------------------------
 
